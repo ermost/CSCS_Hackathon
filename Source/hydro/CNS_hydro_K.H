@@ -9,12 +9,13 @@
 AMREX_GPU_DEVICE
 inline
 void
-srhd_char (int i, int j, int k,
+srhd_char ( 
+           amrex::Real const gamma,
            amrex::Real const rhob,
            amrex::Real const wvx, amrex::Real const wvy, amrex::Real const wvz,
-           amrex::Real const press, amrex::Real const eps_tot,
-           amrex::Real& cm, amrex::Real& cp,
-           Parm const& parm) noexcept {
+           amrex::Real const press, 
+           amrex::Real& cm, amrex::Real& cp
+           ) noexcept {
 
     amrex::Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
     amrex::Real const lorentz2 = 1. + z2;
@@ -26,7 +27,7 @@ srhd_char (int i, int j, int k,
 
     // Need EOS call here!!
 //    amrex::Real const cs2 = EOS_t::cs2__rho_eps_th(U[RHOB], U[EPS]);
-    amrex::Real const rhoh = eps_tot * parm.gamma + rhob;
+    amrex::Real const rhoh = (press/(gamma-1.)) * gamma + rhob;
     amrex::Real const cs2 = parm.gamma * press / rhoh;
 
     amrex::Real const z2_par = wvx * wvx;
@@ -35,8 +36,8 @@ srhd_char (int i, int j, int k,
 
     amrex::Real const invden = 1. / (1. - v2 * cs2);
 
-    cm = p1 + tmp) * invden;
-    cp = ((p1 - tmp) * invden);
+    cp = p1 + tmp) * invden;
+    cm = ((p1 - tmp) * invden);
 }
 
 AMREX_GPU_DEVICE
@@ -480,11 +481,19 @@ riemann (const amrex::Real gamma, const amrex::Real smallp, const amrex::Real sm
     T UyR = ut1r;
     T UzR = ut2r;
 
+
+
     switch_to_cons(gamma, UrhoL, UeL, UxL, UyL,  UzL);
     switch_to_cons(gamma, UrhoR, UeR, UxR, UyR,  UzR);
 
-    T cp;
-    T cm;
+    T cpr, cpl;
+    T cmr, cml;
+
+    srhd_char( gamma, rr, ur, ut1r, ut2r, pr, cmr, cpr);
+    srhd_char( gamma, rl, ul, ut1l, ut2l, pl, cml, cpl);
+    
+    T cp = amrex::max(amrex::max(cpl, cpr), amrex::Real(0.));
+    T cm = amrex::max(amrex::max(-cml, -cmr), amrex::Real(0.));
 
     //Compute Characteristics
 
