@@ -15,25 +15,95 @@ cns_ctoprim (int i, int j, int k,
              Parm const& parm) noexcept
 {
     using amrex::Real;
+    using T = amrex::Real;
 
-    Real rho = amrex::max(u(i,j,k,URHO),parm.smallr);
-    Real rhoinv = Real(1.0)/rho;
-    Real ux = u(i,j,k,UMX)*rhoinv;
-    Real uy = u(i,j,k,UMY)*rhoinv;
-    Real uz = u(i,j,k,UMZ)*rhoinv;
-    Real kineng = Real(0.5)*rho*(ux*ux+uy*uy+uz*uz);
-    Real ei = u(i,j,k,UEDEN) - kineng;
-    if (ei <= Real(0.0)) ei = u(i,j,k,UEINT);
-    Real p = amrex::max((parm.eos_gamma-Real(1.0))*ei,parm.smallp);
+    Real rho = u(i,j,k,URHO);
+    Real ux = u(i,j,k,UMX);
+    Real uy = u(i,j,k,UMY);
+    Real uz = u(i,j,k,UMZ);
+    Real ei = u(i,j,k,UEDEN);
     ei *= rhoinv;
 
-    q(i,j,k,QRHO) = rho;
-    q(i,j,k,QU) = ux;
-    q(i,j,k,QV) = uy;
-    q(i,j,k,QW) = uz;
-    q(i,j,k,QEINT) = ei;
-    q(i,j,k,QPRES) = p;
-    q(i,j,k,QCS) = std::sqrt(parm.eos_gamma*p*rhoinv);
+
+    if (u(i,j,k,URHO) < parm.smallr) {
+      rho = parm.smallr;
+      ei = 0;
+      ux = 0;
+      uy = 0;
+      uz = 0;
+    }
+
+    T press = 0.;
+    T epst;
+    T press_prev = 1.e99;
+    T press_pp = 1.e109;
+
+    T rhob =parm.smallr;
+    T eps;
+
+    auto const rhostari = 1./rho;
+
+    auto const Snorm = std::sqrt(ux * ux + uy * uy+ uz * uz)*rhostari;
+
+    int nn = 0;
+    T lorentz = 1.;
+    T hWi =  1.;
+
+    bool print = false;
+//    while ((amrex::Math::abs(press - press_prev) > c2p_tol * press) && (nn < 1000)) {
+    for(nn=0; nn< 20; ++nn){
+
+      auto const hW = (ei + press) * rhostari + 1.;
+      hWi = 1. / hW;
+
+
+      auto const v = amrex::min( amrex::abs(Snorm*hWi), 0.9999499987499375);
+      auto const v2 = v*v;
+
+      auto const lorentz2i = amrex::Math::abs(1.-(v2));
+      auto const lorentzi = amrex::Math::sqrt(lorentz2i);
+      lorentz = 1./lorentzi;
+
+
+      rhob = rho * lorentzi;
+
+//      auto eps = Uout[RHOB]*(hW * lorentzi - 1.) - press;
+      eps = ei * lorentz2i - (rho /(lorentz+1.) + press)*v2;
+      eps =  amrex::max(eps, rho*eps_atmo);
+      Uout[EPS] = eps;
+
+
+      press_pp = press_prev;
+      press_prev = press;
+
+      // Need EOS call here!!
+      press = eps*(parm.gamma-1.); //EOS_t::press_eps__rho_eps_th(eps, Uout[RHOB], Uout[EPS]);
+      press = amrex::Math::abs(press); //std::max(-(U[RHOSTAR]+U[TAUENERGY]), press);
+
+      //Aitken accelerator
+      auto const R = (press - press_prev)/(press_prev - press_pp);
+      auto const Paitken = std::abs(press_prev + (press-press_prev)/(1.-R));
+
+     if(std::abs(R) < 1. && nn > 2){
+	      press_pp = press_prev;
+	      press_prev = press;
+	      press=Paitken;
+     };
+
+
+      nn++;
+    };
+
+     auto const conv =  hWi * rhostari * lorentz;
+
+    q(i,j,k,QRHO) = rhob;
+    q(i,j,k,QU) = ux*conv;
+    q(i,j,k,QV) = uy*conv;
+    q(i,j,k,QW) = uz*conv;
+    q(i,j,k,QEINT) = eps;
+    q(i,j,k,QPRES) = press;
+    auto rhoh  = eps*parm.gamma+Uout[QRHO];
+    q(i,j,k,QCS) = parm.gamma*press/rhoh;
     q(i,j,k,QTEMP) = Real(0.0);
 }
 
