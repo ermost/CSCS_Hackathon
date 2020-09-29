@@ -9,6 +9,43 @@
 AMREX_GPU_DEVICE
 inline
 void
+srhd_flux (int i, int j, int k,
+           amrex::Real const rhob,
+           amrex::Real const wvx, amrex::Real const wvy, amrex::Real const wvz, 
+           amrex::Real const press, amrex::Real const eps_tot,
+           amrex::Real& rhob_wv, amrex::Real& taud_wv,
+           amrex::Real& stx_wv, amrex::Real& sty_wv, amrex::Real& sty_wv,
+           Parm const& parm) noexcept {
+
+  // Compute fluxes for all components, here we have only one!
+  
+  Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
+  Real const lorentz = std::sqrt(1. + z2);
+  
+  // Need EOS call here!!
+//  T eps_tot;
+//  Real press = EOS_t::press_eps__rho_eps_th(eps_tot, U[RHOB], U[EPS]);
+  
+  Real const rhoh = rhob + (press + eps_tot);
+  
+  Real const stx = rhoh * uvx;
+  Real const sty = rhoh * wvy;
+  Real const stz = rhoh * wvz;
+  
+  //    Real const taud = rhoh*lorentz - U[RHOB];
+  //    This should also work without double precision for small velocities
+  Real const taud = (press + eps_tot) * lorentz + rhob * z2 / (lorentz + 1.);
+  
+  rhob_wv = rhob * wvx;
+  taud_wv = taud * wvx;
+  stx_wv = stx * wvx + press;
+  sty_wv = sty * wvx;
+  stz_wv = stz * wvx;
+}
+
+AMREX_GPU_DEVICE
+inline
+void
 cns_ctoprim (int i, int j, int k,
              amrex::Array4<amrex::Real const> const& u,
              amrex::Array4<amrex::Real> const& q,
