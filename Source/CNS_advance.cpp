@@ -136,7 +136,7 @@ CNS::compute_dSdt (const MultiFab& S, MultiFab& dSdt, Real dt,
         amrex::ParallelFor(yflxbx,
         [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
         {
-            cns_riemann_y(i, j, k, fxfab, slopeL, slopeR, q, *lparm);
+            cns_riemann_y(i, j, k, fyfab, slopeL, slopeR, q, *lparm);
             for (int n = neqns; n < ncons; ++n) fyfab(i,j,k,n) = Real(0.0);
         });
 
@@ -152,7 +152,7 @@ CNS::compute_dSdt (const MultiFab& S, MultiFab& dSdt, Real dt,
         amrex::ParallelFor(zflxbx,
         [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
         {
-            cns_riemann_z(i, j, k, fxfab, slopeL, slopeR, q, *lparm);
+            cns_riemann_z(i, j, k, fzfab, slopeL, slopeR, q, *lparm);
             for (int n = neqns; n < ncons; ++n) fzfab(i,j,k,n) = Real(0.0);
         });
 
