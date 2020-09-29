@@ -19,7 +19,7 @@ srhd_char (
 
     amrex::Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
     amrex::Real const lorentz2 = 1. + z2;
-    amrex::Real const lorentz = amrex::Math::sqrt(lorentz2);
+    amrex::Real const lorentz = sqrt(lorentz2);
     amrex::Real const lorentzi = 1./lorentz;
     amrex::Real const lorentzi2 = 1./lorentz2;
 
@@ -28,15 +28,15 @@ srhd_char (
     // Need EOS call here!!
 //    amrex::Real const cs2 = EOS_t::cs2__rho_eps_th(U[RHOB], U[EPS]);
     amrex::Real const rhoh = (press/(gamma-1.)) * gamma + rhob;
-    amrex::Real const cs2 = parm.gamma * press / rhoh;
+    amrex::Real const cs2 = gamma * press / rhoh;
 
     amrex::Real const z2_par = wvx * wvx;
-    amrex::Real const tmp = amrex::Math::sqrt(cs2 * lorentzi2 * (1. - (z2_par + (z2 - z2_par) * cs2) * lorentzi2)
+    amrex::Real const tmp = sqrt(cs2 * lorentzi2 * (1. - (z2_par + (z2 - z2_par) * cs2) * lorentzi2));
     amrex::Real const p1 = wvx * lorentzi * (1. - cs2);
 
     amrex::Real const invden = 1. / (1. - v2 * cs2);
 
-    cp = p1 + tmp) * invden;
+    cp = (p1 + tmp) * invden;
     cm = ((p1 - tmp) * invden);
 }
 
@@ -45,7 +45,7 @@ inline
 void
 srhd_flux (amrex::Real const gamma,
            amrex::Real& rhob_wv, amrex::Real& taud_wv,
-           amrex::Real& stx_wv, amrex::Real& sty_wv, amrex::Real& sty_wv)
+           amrex::Real& stx_wv, amrex::Real& sty_wv, amrex::Real& stz_wv)
   noexcept {
 
   // Compute fluxes for all components, here we have only one!
@@ -58,7 +58,7 @@ srhd_flux (amrex::Real const gamma,
   auto &press = taud_wv;
   
   Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
-  Real const lorentz = amrex::Math::sqrt(1. + z2);
+  Real const lorentz = sqrt(1. + z2);
   
   // Need EOS call here!!
 //  T eps_tot;
@@ -66,7 +66,7 @@ srhd_flux (amrex::Real const gamma,
   
   Real const rhoh = rhob + (press + press/(gamma-1.));
   
-  Real const stx = rhoh * uvx;
+  Real const stx = rhoh * wvx;
   Real const sty = rhoh * wvy;
   Real const stz = rhoh * wvz;
   
@@ -109,7 +109,6 @@ cns_ctoprim (int i, int j, int k,
     }
 
     T press = 0.;
-    T epst;
     T press_prev = 1.e99;
     T press_pp = 1.e109;
 
@@ -118,13 +117,12 @@ cns_ctoprim (int i, int j, int k,
 
     auto const rhostari = 1./rho;
 
-    auto const Snorm = std::sqrt(ux * ux + uy * uy+ uz * uz)*rhostari;
+    auto const Snorm = sqrt(ux * ux + uy * uy+ uz * uz)*rhostari;
 
     int nn = 0;
     T lorentz = 1.;
     T hWi =  1.;
 
-    bool print = false;
 //    while ((amrex::Math::abs(press - press_prev) > c2p_tol * press) && (nn < 1000)) {
     for(nn=0; nn< 20; ++nn){
 
@@ -132,11 +130,11 @@ cns_ctoprim (int i, int j, int k,
       hWi = 1. / hW;
 
 
-      auto const v = amrex::min( amrex::abs(Snorm*hWi), 0.9999499987499375);
+      auto const v = amrex::min( amrex::Math::abs(Snorm*hWi), 0.9999499987499375);
       auto const v2 = v*v;
 
       auto const lorentz2i = amrex::Math::abs(1.-(v2));
-      auto const lorentzi = amrex::Math::sqrt(lorentz2i);
+      auto const lorentzi = sqrt(lorentz2i);
       lorentz = 1./lorentzi;
 
 
@@ -151,7 +149,7 @@ cns_ctoprim (int i, int j, int k,
       press_prev = press;
 
       // Need EOS call here!!
-      press = eps*(parm.gamma-1.); //EOS_t::press_eps__rho_eps_th(eps, Uout[RHOB], Uout[EPS]);
+      press = eps*(parm.eos_gamma-1.); //EOS_t::press_eps__rho_eps_th(eps, Uout[RHOB], Uout[EPS]);
       press = amrex::Math::abs(press); //std::max(-(U[RHOSTAR]+U[TAUENERGY]), press);
 
       //Aitken accelerator
@@ -176,8 +174,8 @@ cns_ctoprim (int i, int j, int k,
     q(i,j,k,QW) = uz*conv;
     q(i,j,k,QEINT) = eps/rhob;
     q(i,j,k,QPRES) = press;
-    auto rhoh  = eps*parm.gamma+rhob;
-    q(i,j,k,QCS) = parm.gamma*press/rhoh;
+    auto rhoh  = eps*parm.eos_gamma+rhob;
+    q(i,j,k,QCS) = parm.eos_gamma*press/rhoh;
     q(i,j,k,QTEMP) = Real(0.0);
 }
 
@@ -421,10 +419,12 @@ switch_to_cons (const amrex::Real gamma,
 
     auto const z2 = Ux * Ux + Uy * Uy + Uz * Uz;
     auto const lorentz2 = 1. + z2;
-    auto const lorentz = amrex::Math::sqrt(lorentz2);
+    auto const lorentz = sqrt(lorentz2);
 
     // Need EOS call here!!
-    auto press = eps*(gamma-1.);
+    auto press =  Ue; //eps*(gamma-1.);
+
+    auto eps = press/(gamma -1.);
 
     Urho *= lorentz;
     auto const rhohW = Urho + (press + eps) * lorentz;
@@ -435,7 +435,7 @@ switch_to_cons (const amrex::Real gamma,
 
 //    U[TAUENERGY] = rhohW * lorentz - press -  U[RHOSTAR];
 //    This should also work without double precision for small velocities
-    Ue  = press*z2 + eps_tot * lorentz2 + Urho*z2/(lorentz+1.);
+    Ue  = press*z2 + eps * lorentz2 + Urho*z2/(lorentz+1.);
 };
 
 AMREX_GPU_DEVICE
@@ -497,7 +497,7 @@ riemann (const amrex::Real gamma, const amrex::Real smallp, const amrex::Real sm
 
     //Compute Characteristics
 
-    auto const hll = [=cp, =cm](auto const Fl, auto const Fr, auto const Ul, auto const Ur){
+    auto const hll = [cp, cm](auto const Fl, auto const Fr, auto const Ul, auto const Ur){
       return (cm*Fr + cp*Fl - cp*cm*(Ur-Ul))/(cp+cm);
     };
 
