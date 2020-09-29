@@ -22,7 +22,7 @@ cns_ctoprim (int i, int j, int k,
     Real uy = u(i,j,k,UMY);
     Real uz = u(i,j,k,UMZ);
     Real ei = u(i,j,k,UEDEN);
-    ei *= rhoinv;
+    //ei *= rhoinv;
 
 
     if (u(i,j,k,URHO) < parm.smallr) {
@@ -69,8 +69,7 @@ cns_ctoprim (int i, int j, int k,
 
 //      auto eps = Uout[RHOB]*(hW * lorentzi - 1.) - press;
       eps = ei * lorentz2i - (rho /(lorentz+1.) + press)*v2;
-      eps =  amrex::max(eps, rho*eps_atmo);
-      Uout[EPS] = eps;
+      eps =  amrex::max(eps, rho*1.e-10);
 
 
       press_pp = press_prev;
@@ -100,9 +99,9 @@ cns_ctoprim (int i, int j, int k,
     q(i,j,k,QU) = ux*conv;
     q(i,j,k,QV) = uy*conv;
     q(i,j,k,QW) = uz*conv;
-    q(i,j,k,QEINT) = eps;
+    q(i,j,k,QEINT) = eps/rhob;
     q(i,j,k,QPRES) = press;
-    auto rhoh  = eps*parm.gamma+Uout[QRHO];
+    auto rhoh  = eps*parm.gamma+rhob;
     q(i,j,k,QCS) = parm.gamma*press/rhoh;
     q(i,j,k,QTEMP) = Real(0.0);
 }
@@ -332,6 +331,38 @@ cns_wenoz_z (int i, int j, int k,
 
 namespace {
 
+
+
+
+AMREX_GPU_DEVICE
+inline
+void
+switch_to_cons (const amrex::Real gamma, 
+                amrex::Real &Urho,
+                amrex::Real &Ue, // initialise with eps
+                amrex::Real &Ux,
+                amrex::Real &Uy,
+                amrex::Real &Uz){
+
+    auto const z2 = Ux * Ux + Uy * Uy + Uz * Uz;
+    auto const lorentz2 = 1. + z2;
+    auto const lorentz = amrex::Math::sqrt(lorentz2);
+
+    // Need EOS call here!!
+    auto press = eps*(gamma-1.);
+
+    Urho *= lorentz;
+    auto const rhohW = Urho + (press + eps) * lorentz;
+
+    Ux *= rhohW;
+    Uy *= rhohW;
+    Uz *= rhohW;
+
+//    U[TAUENERGY] = rhohW * lorentz - press -  U[RHOSTAR];
+//    This should also work without double precision for small velocities
+    Ue  = press*z2 + eps_tot * lorentz2 + Urho*z2/(lorentz+1.);
+};
+
 AMREX_GPU_DEVICE
 inline
 void
@@ -343,125 +374,51 @@ riemann (const amrex::Real gamma, const amrex::Real smallp, const amrex::Real sm
          amrex::Real& flxrho, amrex::Real& flxu, amrex::Real& flxut,
          amrex::Real& flxutt, amrex::Real& flxe) noexcept
 {
-    using amrex::Real;
+    using T = amrex::Real;
 
-    constexpr Real weakwv = Real(1.e-3);
-    constexpr Real small = Real(1.e-6);
+    T FrhoL;    
+    T FepsL;    
+    T FuxL;    
+    T FuyL;    
+    T FuzL;    
 
-    Real clsql = gamma*pl*rl;
-    Real clsqr = gamma*pr*rr;
-    Real wl = std::sqrt(clsql);
-    Real wr = std::sqrt(clsqr);
-    Real cleft = wl/rl;
-    Real cright = wr/rr;
-    Real ccsmall = small*(cleft+cright);
+    T FrhoR;    
+    T FepsR;    
+    T FuxR;    
+    T FuyR;    
+    T FuzR;    
 
-    Real pstar = (wl*pr + wr*pl - wr*wl*(ur-ul))/(wl+wr);
-    pstar = amrex::max(pstar,smallp);
-    Real pstnm1 = pstar;
+    //Compute fluxes
 
-    Real wlsq = (Real(0.5)*(gamma-Real(1.))*(pstar+pl)+pstar)*rl;
-    Real wrsq = (Real(0.5)*(gamma-Real(1.))*(pstar+pr)+pstar)*rr;
+    T UrhoL =rl;
+    T UeL = pl;
+    T UxL = ul;
+    T UyL = ut1l;
+    T UzL = ut2l;
 
-    wl = std::sqrt(wlsq);
-    wr = std::sqrt(wrsq);
-    Real ustarp = ul - (pstar-pl)/wl;
-    Real ustarm = ur + (pstar-pr)/wr;
+    T UrhoR =rr;
+    T UeR = pr;
+    T UxR = ur;
+    T UyR = ut1r;
+    T UzR = ut2r;
 
-    pstar = (wl*pr + wr*pl - wr*wl*(ur-ul))/(wl+wr);
-    pstar = amrex::max(pstar,smallp);
 
-    Real ustar;
-    for (int iter = 0; iter < 3; ++iter)
-    {
-        wlsq = (Real(0.5)*(gamma-Real(1.))*(pstar+pl)+pstar)*rl;
-        wrsq = (Real(0.5)*(gamma-Real(1.))*(pstar+pr)+pstar)*rr;
+    T cp;
+    T cm;
 
-        wl = Real(1.)/std::sqrt(wlsq);
-        wr = Real(1.)/std::sqrt(wrsq);
+    //Compute Characteristics
 
-        Real ustnm1 = ustarm;
-        Real ustnp1 = ustarp;
+    auto const hll = [=cp, =cm](auto const Fl, auto const Fr, auto const Ul, auto const Ur){
+      return (cm*Fr + cp*Fl - cp*cm*(Ur-Ul))/(cp+cm);
+    };
 
-        ustarm = ur - (pr - pstar)*wr;
-        ustarp = ul + (pl - pstar)*wl;
+    flxrho = hll(FrhoL, FrhoR, UrhoL, UrhoR);
+    flxe   = hll(FepsL, FepsR, UeL, UeR);
+    flxu   = hll(FuxL, FuxR, UxL, UxR);
+    flxut  = hll(FuyL, FuyR, UyL, UyR);
+    flxutt = hll(FuzL, FuzR, UzL, UzR);
 
-        Real dpditer = amrex::Math::abs(pstnm1-pstar);
-        Real zp = amrex::Math::abs(ustarp-ustnp1);
-        if (zp-weakwv*cleft < Real(0.0) ) {
-            zp = dpditer*wl;
-        }
-        Real zm = amrex::Math::abs(ustarm-ustnm1);
-        if (zm-weakwv*cright < Real(0.0) ) {
-            zm = dpditer*wr;
-        }
-
-        Real zz = zp+zm;
-        Real denom = dpditer/ amrex::max(zz,ccsmall);
-        pstnm1 = pstar;
-        pstar = pstar - denom*(ustarm-ustarp);
-        pstar = amrex::max(pstar,smallp);
-        ustar = Real(0.5)*(ustarm+ustarp);
-    }
-
-    Real ro, uo, po, sgnm, utrans1, utrans2;
-    if (ustar > Real(0.)) {
-        ro = rl;
-        uo = ul;
-        po = pl;
-        sgnm = Real(1.);
-        utrans1 = ut1l;
-        utrans2 = ut2l;
-    } else if (ustar < Real(0.)) {
-        ro = rr;
-        uo = ur;
-        po = pr;
-        sgnm = Real(-1.);
-        utrans1 = ut1r;
-        utrans2 = ut2r;
-    } else {
-        uo = Real(0.5)*(ur+ul);
-        po = Real(0.5)*(pr+pl);
-        ro = Real(2.)*(rl*rr)/(rl+rr);
-        sgnm = Real(1.);
-        utrans1 = Real(0.5)*(ut1l+ut1r);
-        utrans2 = Real(0.5)*(ut2l+ut2r);
-    }
-    Real wosq = (Real(0.5)*(gamma-Real(1.))*(pstar+po)+pstar)*ro;
-    Real co = std::sqrt(gamma * po / ro);
-    Real wo = std::sqrt(wosq);
-    Real dpjmp = pstar-po;
-    Real rstar = ro/(Real(1.)-ro*dpjmp/wosq);
-    Real cstar = std::sqrt(gamma * pstar / rstar);
-    Real spout = co-sgnm*uo;
-    Real spin = cstar - sgnm*uo;
-    if(pstar >= po) {
-        spin = wo/ro-sgnm*uo;
-        spout = spin;
-    }
-    Real ss = amrex::max(spout-spin, spout+spin);
-    Real frac = Real(0.5)*(Real(1.)+(spin+spout)/amrex::max(ss,ccsmall));
-
-    Real rgdnv, ugdnv, pgdnv;
-    if (spout < Real(0.)) {
-        rgdnv = ro;
-        ugdnv = uo;
-        pgdnv = po;
-    } else if(spin >= Real(0.)) {
-        rgdnv = rstar;
-        ugdnv = ustar;
-        pgdnv = pstar;
-    } else {
-        rgdnv = frac*rstar + (Real(1.) - frac)* ro;
-        ugdnv = frac*ustar + (Real(1.) - frac)* uo;
-        pgdnv = frac*pstar + (Real(1.) - frac)* po;
-    }
     
-    flxrho = rgdnv*ugdnv;
-    flxu = rgdnv*ugdnv*ugdnv+pgdnv;
-    flxut = rgdnv*ugdnv*utrans1;
-    flxutt = rgdnv*ugdnv*utrans2;
-    flxe = ugdnv*(Real(0.5)*rgdnv*(ugdnv*ugdnv+utrans1*utrans1+utrans2*utrans2) + pgdnv/(gamma -Real(1.)) + pgdnv);
 }
 }
 
