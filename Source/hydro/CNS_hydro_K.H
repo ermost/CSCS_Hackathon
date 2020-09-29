@@ -9,24 +9,28 @@
 AMREX_GPU_DEVICE
 inline
 void
-srhd_flux (int i, int j, int k,
-           amrex::Real const rhob,
-           amrex::Real const wvx, amrex::Real const wvy, amrex::Real const wvz, 
-           amrex::Real const press, amrex::Real const eps_tot,
+srhd_flux (amrex::Real const gamma,
            amrex::Real& rhob_wv, amrex::Real& taud_wv,
-           amrex::Real& stx_wv, amrex::Real& sty_wv, amrex::Real& sty_wv,
-           Parm const& parm) noexcept {
+           amrex::Real& stx_wv, amrex::Real& sty_wv, amrex::Real& sty_wv)
+  noexcept {
 
   // Compute fluxes for all components, here we have only one!
   
+  auto &wvx = stx_wv;
+  auto &wvy = sty_wv;
+  auto &wvz = stz_wv;
+
+  auto &rhob = rhob_wv;
+  auto &press = taud_wv;
+  
   Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
-  Real const lorentz = std::sqrt(1. + z2);
+  Real const lorentz = amrex::Math::sqrt(1. + z2);
   
   // Need EOS call here!!
 //  T eps_tot;
 //  Real press = EOS_t::press_eps__rho_eps_th(eps_tot, U[RHOB], U[EPS]);
   
-  Real const rhoh = rhob + (press + eps_tot);
+  Real const rhoh = rhob + (press + press/(gamma-1.));
   
   Real const stx = rhoh * uvx;
   Real const sty = rhoh * wvy;
@@ -34,14 +38,14 @@ srhd_flux (int i, int j, int k,
   
   //    Real const taud = rhoh*lorentz - U[RHOB];
   //    This should also work without double precision for small velocities
-  Real const taud = (press + eps_tot) * lorentz + rhob * z2 / (lorentz + 1.);
+  Real const taud = (press + press/(gamma -1.)) * lorentz + rhob * z2 / (lorentz + 1.);
   
   rhob_wv = rhob * wvx;
-  taud_wv = taud * wvx;
-  stx_wv = stx * wvx + press;
   sty_wv = sty * wvx;
   stz_wv = stz * wvx;
-}
+  stx_wv = stx * wvx + press;
+  taud_wv = taud * wvx;
+};
 
 AMREX_GPU_DEVICE
 inline
@@ -413,17 +417,21 @@ riemann (const amrex::Real gamma, const amrex::Real smallp, const amrex::Real sm
 {
     using T = amrex::Real;
 
-    T FrhoL;    
-    T FepsL;    
-    T FuxL;    
-    T FuyL;    
-    T FuzL;    
+    T FrhoL = rl;    
+    T FepsL = pl;    
+    T FuxL = ul;    
+    T FuyL =ut1l;    
+    T FuzL = ut2l;    
 
-    T FrhoR;    
-    T FepsR;    
-    T FuxR;    
-    T FuyR;    
-    T FuzR;    
+    T FrhoR = rr;    
+    T FepsR = pr;    
+    T FuxR  = ur;    
+    T FuyR  = ut1r;    
+    T FuzR  = ut2r;    
+
+    srhd_flux(gamma, FrhoL, FepsL, FuxL, FuyL, FuzL);
+    srhd_flux(gamma, FrhoR, FepsR, FuxR, FuyR, FuzR);
+
 
     //Compute fluxes
 
@@ -439,6 +447,8 @@ riemann (const amrex::Real gamma, const amrex::Real smallp, const amrex::Real sm
     T UyR = ut1r;
     T UzR = ut2r;
 
+    switch_to_cons(gamma, UrhoL, UeL, UxL, UyL,  UzL);
+    switch_to_cons(gamma, UrhoR, UeR, UxR, UyR,  UzR);
 
     T cp;
     T cm;
