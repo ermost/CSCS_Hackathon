@@ -18,7 +18,7 @@ srhd_char (int i, int j, int k,
 
     amrex::Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
     amrex::Real const lorentz2 = 1. + z2;
-    amrex::Real const lorentz = std::sqrt(lorentz2);
+    amrex::Real const lorentz = amrex::Math::sqrt(lorentz2);
     amrex::Real const lorentzi = 1./lorentz;
     amrex::Real const lorentzi2 = 1./lorentz2;
 
@@ -53,7 +53,7 @@ srhd_flux (int i, int j, int k,
   // Compute fluxes for all components, here we have only one!
   
   Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
-  Real const lorentz = std::sqrt(1. + z2);
+  Real const lorentz = amrex::Math::sqrt(1. + z2);
   
   // Need EOS call here!!
 //  T eps_tot;
