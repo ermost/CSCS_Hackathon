@@ -9,6 +9,39 @@
 AMREX_GPU_DEVICE
 inline
 void
+srhd_char (int i, int j, int k,
+           amrex::Real const rhob,
+           amrex::Real const wvx, amrex::Real const wvy, amrex::Real const wvz,
+           amrex::Real const press, amrex::Real const eps_tot,
+           amrex::Real& cm, amrex::Real& cp,
+           Parm const& parm) noexcept {
+
+    amrex::Real const z2 = wvx * wvx + wvy * wvy + wvz * wvz;
+    amrex::Real const lorentz2 = 1. + z2;
+    amrex::Real const lorentz = std::sqrt(lorentz2);
+    amrex::Real const lorentzi = 1./lorentz;
+    amrex::Real const lorentzi2 = 1./lorentz2;
+
+    amrex::Real const v2 = z2 * lorentzi2;
+
+    // Need EOS call here!!
+//    amrex::Real const cs2 = EOS_t::cs2__rho_eps_th(U[RHOB], U[EPS]);
+    amrex::Real const rhoh = eps_tot * parm.gamma + rhob;
+    amrex::Real const cs2 = parm.gamma * press / rhoh;
+
+    amrex::Real const z2_par = wvx * wvx;
+    amrex::Real const tmp = amrex::Math::sqrt(cs2 * lorentzi2 * (1. - (z2_par + (z2 - z2_par) * cs2) * lorentzi2)
+    amrex::Real const p1 = wvx * lorentzi * (1. - cs2);
+
+    amrex::Real const invden = 1. / (1. - v2 * cs2);
+
+    cm = p1 + tmp) * invden;
+    cp = ((p1 - tmp) * invden);
+}
+
+AMREX_GPU_DEVICE
+inline
+void
 srhd_flux (int i, int j, int k,
            amrex::Real const rhob,
            amrex::Real const wvx, amrex::Real const wvy, amrex::Real const wvz, 
