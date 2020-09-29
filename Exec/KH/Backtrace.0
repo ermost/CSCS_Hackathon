@@ -1,0 +1,54 @@
+=== If no file names and line numbers are shown below, one can run
+            addr2line -Cpfie my_exefile my_line_address
+    to convert `my_line_address` (e.g., 0x4a6b) into file name and line number.
+    Or one can use amrex/Tools/Backtrace/parse_bt.py.
+
+=== Please note that the line number reported by addr2line may not be accurate.
+    One can use
+            readelf -wl my_exefile | grep my_line_address'
+    to find out the offset for that line.
+
+ 0: ./CNS3d.gnu.TPROF.MPI.ex() [0x53ae56]
+    amrex::BLBackTrace::print_backtrace_info(_IO_FILE*) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Src/Base/AMReX_BLBackTrace.cpp:174
+
+ 1: ./CNS3d.gnu.TPROF.MPI.ex() [0x53cbc2]
+    amrex::BLBackTrace::handler(int) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Src/Base/AMReX_BLBackTrace.cpp:80
+
+ 2: /lib/x86_64-linux-gnu/libc.so.6(+0x3efd0) [0x7f321c0e5fd0]
+
+ 3: ./CNS3d.gnu.TPROF.MPI.ex() [0x411c9c]
+    CNS::compute_dSdt(amrex::MultiFab const&, amrex::MultiFab&, double, amrex::FluxRegister*, amrex::FluxRegister*) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Tutorials/GPU/CNS/Source/hydro/CNS_hydro_K.H:157
+ (inlined by) cns_wenoz_z(int, int, int, amrex::Array4<double> const&, amrex::Array4<double> const&, amrex::Array4<double const> const&) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Tutorials/GPU/CNS/Source/hydro/CNS_hydro_K.H:245
+ (inlined by) operator() at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Tutorials/GPU/CNS/Source/CNS_advance.cpp:150
+ (inlined by) ?? at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Src/Base/AMReX_GpuLaunchFunctsC.H:50
+ (inlined by) CNS::compute_dSdt(amrex::MultiFab const&, amrex::MultiFab&, double, amrex::FluxRegister*, amrex::FluxRegister*) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Tutorials/GPU/CNS/Source/CNS_advance.cpp:147
+
+ 4: ./CNS3d.gnu.TPROF.MPI.ex() [0x413c25]
+    CNS::advance(double, double, int, int) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Tutorials/GPU/CNS/Source/CNS_advance.cpp:42
+
+ 5: ./CNS3d.gnu.TPROF.MPI.ex() [0x5db56a]
+    amrex::Amr::timeStep(int, double, int, int, double) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Src/Amr/AMReX_Amr.cpp:1977
+
+ 6: ./CNS3d.gnu.TPROF.MPI.ex() [0x5db66c]
+    amrex::Amr::timeStep(int, double, int, int, double) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Src/Amr/AMReX_Amr.cpp:2023 (discriminator 2)
+
+ 7: ./CNS3d.gnu.TPROF.MPI.ex() [0x5cf5a3]
+    amrex::Amr::coarseTimeStep(double) at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Src/Amr/AMReX_Amr.cpp:2087
+
+ 8: ./CNS3d.gnu.TPROF.MPI.ex() [0x408bb5]
+    main at /home/u00u5ketgidiuHrRnz357/new/amrex/Tutorials/GPU/CNS/Exec/RT/../../../../../Tutorials/GPU/CNS/Source/main.cpp:55
+
+ 9: /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xe7) [0x7f321c0c8b97]
+
+10: ./CNS3d.gnu.TPROF.MPI.ex() [0x40ca2a]
+    _start at ??:?
+
+
+===== TinyProfilers ======
+main()
+Amr::coarseTimeStep()
+Amr::timeStep()
+Amr::timeStep()
+CNS::advance()
+CNS::compute_dSdt()
+
