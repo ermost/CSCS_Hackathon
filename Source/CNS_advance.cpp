@@ -140,6 +140,8 @@ CNS::compute_dSdt (const MultiFab& S, MultiFab& dSdt, Real dt,
             for (int n = neqns; n < ncons; ++n) fyfab(i,j,k,n) = Real(0.0);
         });
 
+#if AMREX_SPACEDIM ==3
+
         // z-direction
         cdir = 2;
         const Box& zslpbx = amrex::grow(bx, cdir, 1);
@@ -166,19 +168,8 @@ CNS::compute_dSdt (const MultiFab& S, MultiFab& dSdt, Real dt,
         {
             cns_flux_to_dudt(i, j, k, n, dsdtfab, AMREX_D_DECL(fxfab,fyfab,fzfab), dxinv);
         });
+#endif
 
-        if (gravity != Real(0.0)) {
-            const Real g = gravity;
-            const int irho = Density;
-            const int imz = Zmom;
-            const int irhoE = Eden;
-            amrex::ParallelFor(bx,
-            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-            {
-                dsdtfab(i,j,k,imz) += g * sfab(i,j,k,irho);
-                dsdtfab(i,j,k,irhoE) += g * sfab(i,j,k,imz);
-            });
-        }
     }
 
     if (fr_as_crse) {
